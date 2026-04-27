@@ -49,8 +49,10 @@ class Calculator:
 
     def _build_buttons(self) -> None:
         pad = 8
-        # Calculator grid lives in the lower 60% of the panel
-        grid_top = self.panel_rect.top + int(self.panel_rect.height * 0.42)
+        # Reserve space at the top for the team label, problem, and answer
+        # display: 30 (label) + 80 (problem) + 8 + 44 (answer) + 12 spacer
+        reserved_top = 30 + 80 + 8 + 44 + 12
+        grid_top = self.panel_rect.top + reserved_top
         grid = pygame.Rect(
             self.panel_rect.left + pad,
             grid_top,
@@ -152,12 +154,12 @@ class Calculator:
             (self.panel_rect.left + 14, self.panel_rect.top + 8),
         )
 
-        # Problem area
+        # Problem area (height matches the reserved space in _build_buttons)
         prob_rect = pygame.Rect(
             self.panel_rect.left + 14,
             self.panel_rect.top + 38,
             self.panel_rect.width - 28,
-            int(self.panel_rect.height * 0.22),
+            72,
         )
         pygame.draw.rect(surface, (255, 255, 255), prob_rect, border_radius=8)
         pygame.draw.rect(surface, (60, 60, 60), prob_rect, 2, border_radius=8)
