@@ -147,8 +147,8 @@ class Calculator:
         pygame.draw.rect(surface, bg, self.panel_rect, border_radius=14)
         pygame.draw.rect(surface, self.team_color, self.panel_rect, 4, border_radius=14)
 
-        # Header: team label
-        team_surf = font_med.render(f"{self.label} TEAM", True, self.team_color)
+        # Header: team label (label is expected to already include team wording)
+        team_surf = font_med.render(self.label, True, self.team_color)
         surface.blit(
             team_surf,
             (self.panel_rect.left + 14, self.panel_rect.top + 8),
