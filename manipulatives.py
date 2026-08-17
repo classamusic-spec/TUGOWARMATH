@@ -52,11 +52,60 @@ def _accent(palette=None) -> Color:
 # Counting: dots / objects
 # --------------------------------------------------------------------------- #
 
+def _draw_dot_groups(surf, rect: pygame.Rect, groups: List[int],
+                     labels: List[str], color: Color, t: float) -> None:
+    """Labelled clusters of tokens separated by a '+', for number bonds."""
+    groups = [g for g in groups if g > 0] or [1]
+    total = sum(groups)
+    font = R.font_num(T.T_LABEL, bold=True)
+
+    # Reserve a slim column between clusters for the '+' separators.
+    sep_w = T.S5
+    avail_w = rect.width - sep_w * (len(groups) - 1)
+    widths = [avail_w * (g / total) for g in groups]
+
+    x = rect.left
+    for gi, (g, w) in enumerate(zip(groups, widths)):
+        cluster = pygame.Rect(int(x), rect.top, int(w), rect.height - 22)
+        cols, rows, cell = _fit_grid(g, cluster, max_cols=max(1, min(3, g)))
+        ox = cluster.centerx - (cols * cell) / 2 + cell / 2
+        oy = cluster.centery - (rows * cell) / 2 + cell / 2
+        rad = max(4, cell * 0.30)
+        for i in range(g):
+            c, r = i % cols, i // cols
+            cx, cy = ox + c * cell, oy + r * cell
+            R.add_glow(surf, (int(cx), int(cy)), int(rad * 2.0), color, 55)
+            pygame.draw.circle(surf, T.shade(color, -46),
+                               (int(cx), int(cy + rad * 0.14)), int(rad))
+            pygame.draw.circle(surf, color, (int(cx), int(cy)), int(rad))
+            pygame.draw.circle(surf, T.shade(color, 78),
+                               (int(cx - rad * 0.3), int(cy - rad * 0.34)),
+                               max(1, int(rad * 0.26)))
+        label = labels[gi] if gi < len(labels) else str(g)
+        R.draw_text(surf, str(label), font, T.INK_DIM,
+                    midtop=(cluster.centerx, rect.bottom - 20))
+        x += w
+        if gi < len(groups) - 1:
+            # Just a gap, no operator: these clusters are used for comparison
+            # ("which group has fewer?") as often as for composition, and a
+            # '+' would state the wrong question.
+            x += sep_w
+
+
 def draw_dots(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
     """N countable tokens. Used for Pre-K counting and subitizing."""
     n = int(_get(data, "count", 5))
     color = _get(data, "color", _accent(palette))
     shape = _get(data, "shape", "circle")
+    groups = _get(data, "groups", None)
+    labels = _get(data, "labels", None)
+
+    # `groups` splits the tokens into labelled clusters, which is how the
+    # engine shows composition ("2 and 5 make 7").
+    if groups:
+        _draw_dot_groups(surf, rect, [int(g) for g in groups],
+                         list(labels or []), color, t)
+        return
 
     cols, rows, cell = _fit_grid(n, rect.inflate(-T.S4, -T.S4), max_cols=5)
     radius = cell * 0.32
@@ -95,34 +144,55 @@ def draw_dots(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: fl
 # --------------------------------------------------------------------------- #
 
 def draw_tenframe(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
-    """The classic K/1st ten-frame: two rows of five cells, `filled` occupied."""
-    filled = int(_get(data, "filled", 0))
-    capacity = int(_get(data, "capacity", 10))
+    """One or more ten-frames with `count` counters filled in across them.
+
+    Two frames side by side is the standard way teen numbers are introduced,
+    so `frames` may be >1 and the counters spill into the next frame.
+    """
+    # The math engine emits {count, frames}; {filled, capacity} is also
+    # accepted so hand-authored specs keep working.
+    if "count" in (data or {}):
+        count = int(_get(data, "count", 0))
+        frames = max(1, int(_get(data, "frames", 1)))
+    else:
+        count = int(_get(data, "filled", 0))
+        frames = max(1, math.ceil(int(_get(data, "capacity", 10)) / 10))
     color = _get(data, "color", _accent(palette))
 
-    cols = 5
-    rows = max(1, math.ceil(capacity / cols))
-    cell = min((rect.width - T.S3) / cols, (rect.height - T.S3) / rows)
-    grid_w, grid_h = cell * cols, cell * rows
-    ox = rect.centerx - grid_w / 2
-    oy = rect.centery - grid_h / 2
+    cols, rows = 5, 2
+    gap = T.S3
+    # Each frame is 5x2 cells; fit all frames side by side inside the rect.
+    cell = min(
+        (rect.width - gap * (frames + 1)) / (cols * frames),
+        (rect.height - gap * 2) / rows,
+    )
+    cell = max(6.0, cell)
+    frame_w = cell * cols
+    total_w = frame_w * frames + gap * (frames - 1)
+    ox0 = rect.centerx - total_w / 2
+    oy = rect.centery - (cell * rows) / 2
 
-    frame = pygame.Rect(int(ox), int(oy), int(grid_w), int(grid_h))
-    R.draw_rrect(surf, frame.inflate(8, 8), T.with_alpha(T.INK, 34), T.R_SM, width=0)
+    placed = 0
+    for fi in range(frames):
+        ox = ox0 + fi * (frame_w + gap)
+        outer = pygame.Rect(int(ox), int(oy), int(frame_w), int(cell * rows))
+        R.draw_rrect(surf, outer.inflate(7, 7), T.with_alpha(T.INK, 30), T.R_SM)
 
-    for i in range(capacity):
-        c, r = i % cols, i // cols
-        cx = ox + c * cell + cell / 2
-        cy = oy + r * cell + cell / 2
-        box = pygame.Rect(int(ox + c * cell), int(oy + r * cell), int(cell), int(cell))
-        pygame.draw.rect(surf, T.with_alpha(T.INK_FAINT, 120), box, 2, border_radius=4)
-        if i < filled:
-            rad = cell * 0.32
-            R.add_glow(surf, (int(cx), int(cy)), int(rad * 2.2), color, 70)
-            pygame.draw.circle(surf, color, (int(cx), int(cy)), int(rad))
-            pygame.draw.circle(surf, T.shade(color, 70),
-                               (int(cx - rad * 0.3), int(cy - rad * 0.32)),
-                               max(1, int(rad * 0.26)))
+        for i in range(cols * rows):
+            c, r = i % cols, i // cols
+            box = pygame.Rect(int(ox + c * cell), int(oy + r * cell),
+                              int(cell), int(cell))
+            pygame.draw.rect(surf, T.with_alpha(T.INK_FAINT, 120), box, 2,
+                             border_radius=4)
+            if placed < count:
+                cx, cy = box.centerx, box.centery
+                rad = cell * 0.32
+                R.add_glow(surf, (cx, cy), int(rad * 2.2), color, 70)
+                pygame.draw.circle(surf, color, (cx, cy), int(rad))
+                pygame.draw.circle(surf, T.shade(color, 70),
+                                   (int(cx - rad * 0.3), int(cy - rad * 0.32)),
+                                   max(1, int(rad * 0.26)))
+                placed += 1
 
 
 # --------------------------------------------------------------------------- #
@@ -137,10 +207,22 @@ def draw_numberline(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None,
     lo = float(_get(data, "min", 0))
     hi = float(_get(data, "max", 10))
     step = float(_get(data, "step", 1))
-    marks: Sequence[float] = _get(data, "marks", [])
     hop = _get(data, "hop", None)            # (from, to)
     labels = bool(_get(data, "labels", True))
     color = _get(data, "color", _accent(palette))
+
+    # The engine emits a single `mark` (a known point), an optional `mystery`
+    # (the point the child has to name, drawn hollow), and `denominator` to
+    # subdivide the line into fractional ticks.
+    marks: List[float] = list(_get(data, "marks", []) or [])
+    single = data.get("mark") if isinstance(data, dict) else None
+    if single is not None:
+        marks.append(float(single))
+    mystery = data.get("mystery") if isinstance(data, dict) else None
+    denominator = data.get("denominator") if isinstance(data, dict) else None
+    if denominator:
+        # Fractional number line: tick every 1/denominator of the span.
+        step = (hi - lo) / max(1, int(denominator))
 
     span = max(1e-6, hi - lo)
     y = rect.centery + rect.height * 0.16
@@ -198,6 +280,14 @@ def draw_numberline(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None,
         pygame.draw.circle(surf, color, (int(x), int(y)), 8)
         pygame.draw.circle(surf, T.INK, (int(x), int(y)), 8, 2)
 
+    if mystery is not None:
+        # Hollow gold ring + question mark: "what number sits here?"
+        x = to_x(float(mystery))
+        R.add_glow(surf, (int(x), int(y)), 26, T.GOLD, 120)
+        pygame.draw.circle(surf, T.GOLD, (int(x), int(y)), 10, 3)
+        R.draw_text(surf, "?", R.font_num(T.T_LABEL, bold=True), T.GOLD,
+                    midbottom=(int(x), int(y - 13)))
+
 
 # --------------------------------------------------------------------------- #
 # Fractions
@@ -214,6 +304,17 @@ def draw_fraction_bar(surf, rect: pygame.Rect, data: Dict[str, Any], palette=Non
         bars = [{"num": int(_get(data, "num", 1)), "den": int(_get(data, "den", 2))}]
     color = _get(data, "color", _accent(palette))
 
+    # The engine describes a bar as {parts, filled, label}; older specs use
+    # {num, den}. Normalize to (filled, parts, label) up front.
+    norm: List[Tuple[int, int, Optional[str]]] = []
+    for bar in bars:
+        parts = int(bar.get("parts", bar.get("den", 2)) or 2)
+        filled = int(bar.get("filled", bar.get("num", 0)) or 0)
+        parts = max(1, parts)
+        filled = max(0, min(filled, parts))
+        norm.append((filled, parts, bar.get("label")))
+    bars = norm
+
     n = len(bars)
     bar_h = min(56, (rect.height - T.S3 * (n + 1)) / max(1, n))
     total_h = n * bar_h + (n - 1) * T.S3
@@ -222,9 +323,7 @@ def draw_fraction_bar(surf, rect: pygame.Rect, data: Dict[str, Any], palette=Non
     left = rect.centerx - width / 2
 
     font = R.font_num(T.T_LABEL, bold=True)
-    for bi, bar in enumerate(bars):
-        den = max(1, int(bar.get("den", 2)))
-        num = max(0, int(bar.get("num", 0)))
+    for bi, (num, den, label) in enumerate(bars):
         y = top + bi * (bar_h + T.S3)
         seg_w = width / den
 
@@ -241,7 +340,7 @@ def draw_fraction_bar(surf, rect: pygame.Rect, data: Dict[str, Any], palette=Non
                 R.draw_rrect(surf, seg, T.with_alpha(T.INK, 24), 6)
             pygame.draw.rect(surf, T.with_alpha(T.INK, 90), seg, 2, border_radius=6)
 
-        R.draw_text(surf, f"{num}/{den}", font, T.INK,
+        R.draw_text(surf, label or f"{num}/{den}", font, T.INK,
                     midleft=(int(left + width + T.S3), int(y + bar_h / 2)))
 
 
@@ -397,8 +496,14 @@ _COIN_STYLE = {
 
 def draw_coins(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
     """A handful of US coins for 2nd grade money problems."""
-    coins: List[str] = list(_get(data, "coins", ["quarter", "dime", "penny"]))
-    coins = [c for c in coins if c in _COIN_STYLE][:12]
+    # Accept either plain names or the engine's [{name, value}, ...] form.
+    raw = list(_get(data, "coins", ["quarter", "dime", "penny"]))
+    coins: List[str] = []
+    for entry in raw:
+        name = entry.get("name") if isinstance(entry, dict) else entry
+        if name in _COIN_STYLE:
+            coins.append(name)
+    coins = coins[:12]
     if not coins:
         return
 
@@ -422,7 +527,13 @@ def draw_coins(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: f
 
 def draw_shapes(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
     """2D shape recognition (Pre-K/K) and angle/geometry hints (4th)."""
-    names: List[str] = list(_get(data, "shapes", ["circle"]))[:6]
+    # The engine emits a single `shape` (plus sides/corners/ask); a `shapes`
+    # list is also accepted for multi-shape prompts.
+    names: List[str] = list(_get(data, "shapes", []) or [])
+    if not names:
+        one = data.get("shape") if isinstance(data, dict) else None
+        names = [one] if one else ["circle"]
+    names = [n for n in names if n][:6]
     color = _get(data, "color", _accent(palette))
 
     cols, rows, cell = _fit_grid(len(names), rect.inflate(-T.S4, -T.S4), max_cols=3)
@@ -434,27 +545,46 @@ def draw_shapes(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: 
         cx, cy = ox + c * cell, oy + r * cell
         rad = cell * 0.34
         pts: List[Tuple[float, float]] = []
-        if name in ("triangle", "tri"):
-            sides = 3
-        elif name in ("square", "rect", "rectangle"):
-            sides = 4
-        elif name == "pentagon":
-            sides = 5
-        elif name == "hexagon":
-            sides = 6
-        else:
-            sides = 0
+        # Shapes a child is asked to name must actually look like themselves -
+        # a trapezoid drawn as a regular 4-gon is just a square, and the
+        # question becomes unanswerable. So the irregular ones get explicit
+        # outlines and only the regular polygons are generated from a radius.
+        explicit = {
+            "rectangle": [(-1.25, -0.72), (1.25, -0.72), (1.25, 0.72), (-1.25, 0.72)],
+            "rect": [(-1.25, -0.72), (1.25, -0.72), (1.25, 0.72), (-1.25, 0.72)],
+            "trapezoid": [(-0.62, -0.78), (0.62, -0.78), (1.18, 0.72), (-1.18, 0.72)],
+            "rhombus": [(0.0, -1.15), (0.92, 0.0), (0.0, 1.15), (-0.92, 0.0)],
+            "diamond": [(0.0, -1.15), (0.92, 0.0), (0.0, 1.15), (-0.92, 0.0)],
+            "right_triangle": [(-1.0, 0.85), (1.0, 0.85), (-1.0, -0.95)],
+        }
+        regular = {
+            "triangle": 3, "tri": 3, "square": 4,
+            "pentagon": 5, "hexagon": 6, "heptagon": 7, "octagon": 8,
+        }
+        round_shapes = {"circle", "oval", "ellipse"}
 
-        if sides == 0:
-            pygame.draw.circle(surf, color, (int(cx), int(cy)), int(rad))
-            pygame.draw.circle(surf, T.shade(color, -60), (int(cx), int(cy)), int(rad), 3)
+        if name in explicit:
+            pts = [(cx + ux * rad, cy + uy * rad) for ux, uy in explicit[name]]
+        elif name in round_shapes:
+            box = pygame.Rect(0, 0, int(rad * (2.4 if name != "circle" else 2.0)),
+                              int(rad * 2.0))
+            box.center = (int(cx), int(cy))
+            pygame.draw.ellipse(surf, color, box)
+            pygame.draw.ellipse(surf, T.shade(color, -60), box, 3)
+            continue
         else:
+            sides = regular.get(name) or int(_get(data, "sides", 0) or 0)
+            if sides < 3:
+                pygame.draw.circle(surf, color, (int(cx), int(cy)), int(rad))
+                pygame.draw.circle(surf, T.shade(color, -60), (int(cx), int(cy)), int(rad), 3)
+                continue
             rot = -math.pi / 2 if sides % 2 else -math.pi / 4
-            for s in range(sides):
-                a = rot + math.tau * s / sides
-                pts.append((cx + math.cos(a) * rad, cy + math.sin(a) * rad))
-            pygame.draw.polygon(surf, color, pts)
-            pygame.draw.polygon(surf, T.shade(color, -60), pts, 3)
+            pts = [(cx + math.cos(rot + math.tau * s / sides) * rad,
+                    cy + math.sin(rot + math.tau * s / sides) * rad)
+                   for s in range(sides)]
+
+        pygame.draw.polygon(surf, color, pts)
+        pygame.draw.polygon(surf, T.shade(color, -60), pts, 3)
 
 
 # --------------------------------------------------------------------------- #
