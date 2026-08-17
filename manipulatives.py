@@ -319,10 +319,17 @@ def draw_fraction_bar(surf, rect: pygame.Rect, data: Dict[str, Any], palette=Non
     bar_h = min(56, (rect.height - T.S3 * (n + 1)) / max(1, n))
     total_h = n * bar_h + (n - 1) * T.S3
     top = rect.centery - total_h / 2
-    width = min(rect.width - T.S5 * 2, 420)
-    left = rect.centerx - width / 2
 
-    font = R.font_num(T.T_LABEL, bold=True)
+    # The "1/4" label sits to the right of each bar. Anchor the label column
+    # to the rect's right edge and lay the bars out to its left, so neither
+    # can render past the panel no matter how narrow the panel gets.
+    label_font = R.font_num(T.T_LABEL, bold=True)
+    label_w = max(label_font.size(lbl or f"{a}/{b}")[0] for a, b, lbl in bars)
+    label_x = rect.right - label_w - T.S2
+    left = rect.left + T.S2
+    width = max(40.0, label_x - T.S3 - left)
+
+    font = label_font
     for bi, (num, den, label) in enumerate(bars):
         y = top + bi * (bar_h + T.S3)
         seg_w = width / den
@@ -341,7 +348,7 @@ def draw_fraction_bar(surf, rect: pygame.Rect, data: Dict[str, Any], palette=Non
             pygame.draw.rect(surf, T.with_alpha(T.INK, 90), seg, 2, border_radius=6)
 
         R.draw_text(surf, label or f"{num}/{den}", font, T.INK,
-                    midleft=(int(left + width + T.S3), int(y + bar_h / 2)))
+                    midleft=(int(label_x), int(y + bar_h / 2)))
 
 
 def draw_fraction_circle(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
@@ -379,21 +386,27 @@ def draw_array(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: f
     cols = max(1, int(_get(data, "cols", 4)))
     color = _get(data, "color", _accent(palette))
 
-    cell = min((rect.width - T.S4) / cols, (rect.height - T.S4) / rows)
+    # Reserve a row for the "3 x 4" caption so the grid never grows into it.
+    font = R.font_num(T.T_LABEL, bold=True)
+    caption_h = font.get_height() + T.S2
+    grid_area = pygame.Rect(rect.left, rect.top,
+                            rect.width, max(20, rect.height - caption_h))
+
+    cell = min((grid_area.width - T.S4) / cols, (grid_area.height - T.S4) / rows)
     grid_w, grid_h = cell * cols, cell * rows
-    ox = rect.centerx - grid_w / 2 + cell / 2
-    oy = rect.centery - grid_h / 2 + cell / 2
+    ox = grid_area.centerx - grid_w / 2 + cell / 2
+    oy = grid_area.centery - grid_h / 2 + cell / 2
     rad = max(3, cell * 0.30)
 
     for r in range(rows):
         for c in range(cols):
             cx, cy = ox + c * cell, oy + r * cell
-            pygame.draw.circle(surf, T.shade(color, -50), (int(cx), int(cy + rad * 0.15)), int(rad))
+            pygame.draw.circle(surf, T.shade(color, -50),
+                               (int(cx), int(cy + rad * 0.15)), int(rad))
             pygame.draw.circle(surf, color, (int(cx), int(cy)), int(rad))
 
-    font = R.font_num(T.T_LABEL, bold=True)
     R.draw_text(surf, f"{rows} x {cols}", font, T.INK_DIM,
-                midtop=(rect.centerx, int(oy + grid_h - cell / 2 + T.S3)))
+                midbottom=(rect.centerx, rect.bottom - 2))
 
 
 def draw_base_ten(surf, rect: pygame.Rect, data: Dict[str, Any], palette=None, t: float = 0.0) -> None:
@@ -628,9 +641,20 @@ def draw_visual(surf, rect: pygame.Rect, visual, palette=None, t: float = 0.0) -
     fn = _RENDERERS.get(str(kind).lower())
     if fn is None:
         return False
+
+    # Clip to the caller's rect for the duration of the draw. The individual
+    # renderers size themselves to fit, but a wide label or an awkward operand
+    # count can still push a few pixels past the edge - and on this layout the
+    # panels sit hard against the screen edge, so "a few pixels past" means
+    # visibly cut off at the bezel. Clipping makes overflow impossible rather
+    # than merely unlikely.
+    previous = surf.get_clip()
+    surf.set_clip(rect.clip(surf.get_rect()))
     try:
         fn(surf, rect, data or {}, palette, t)
     except Exception:
         # A malformed spec must never take down a match in progress.
         return False
+    finally:
+        surf.set_clip(previous)
     return True
