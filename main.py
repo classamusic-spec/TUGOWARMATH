@@ -273,19 +273,41 @@ class AnswerPanel:
             return
 
         pr = self.prompt_rect
-        lines = self.problem.prompt.splitlines()[:2]
-        base = T.T_TITLE if (len(lines) == 1 and len(lines[0]) <= 13) else T.T_HEAD
+        # Word problems are full sentences, so shrinking alone isn't enough -
+        # fit_font bottoms out and the tail runs off the panel. Wrap first,
+        # then size the block to whatever room is left.
+        raw = self.problem.prompt.splitlines()
+        base = T.T_TITLE if (len(raw) == 1 and len(raw[0]) <= 13) else T.T_HEAD
         if self.problem.visual is not None:
-            base = min(base, T.T_HEAD)
+            # The picture is the point of these problems, so the wording gives
+            # up size to make room for it. At T_HEAD a two-line prompt ate the
+            # whole panel and the manipulative silently vanished.
+            base = T.T_BODY
+
+        avail_w = pr.width - 16
+        lines: List[str] = []
+        size = base
+        while True:
+            probe = R.font_num(size, bold=True)
+            lines = []
+            for chunk in raw:
+                lines.extend(U.wrap_text(chunk, probe, avail_w))
+            # Long prompts get a smaller face until the block fits the space
+            # the manipulative isn't using.
+            max_lines = 2 if self.problem.visual is not None else 4
+            if len(lines) <= max_lines or size <= T.T_LABEL:
+                break
+            size -= 3
+
+        font = R.font_num(size, bold=True)
         y = pr.top + 4
-        for line in lines:
-            font = U.fit_font(line, pr.width - 16, base, bold=True)
+        for line in lines[:5]:
             R.draw_text(surf, line, font, T.INK, midtop=(pr.centerx, y))
-            y += font.get_height() + 2
+            y += font.get_height() + 1
 
         # Manipulative fills whatever room the prompt left behind.
         vis_bottom = pr.bottom - (44 if not self.ai and self.keypad.mode == "number" else 0)
-        if self.problem.visual is not None and vis_bottom - y > 24:
+        if self.problem.visual is not None and vis_bottom - y > 18:
             MP.draw_visual(surf, pygame.Rect(pr.left, y, pr.width, vis_bottom - y),
                            self.problem.visual, self.palette, t)
 

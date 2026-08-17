@@ -207,10 +207,14 @@ class App:
 
         # Toasts belong to the screen that raised them. Carrying them across a
         # transition drops last match's "unlocked" popups on top of the next
-        # match's HUD.
+        # match's HUD. ToastStack.clear() only starts a dismiss animation, so
+        # drop the lists outright - a hard scene change should take them with
+        # it rather than fading them over the incoming screen.
         if self.toasts is not None:
             try:
                 self.toasts.clear()
+                self.toasts.active.clear()
+                self.toasts.queue.clear()
             except Exception:
                 pass
 
