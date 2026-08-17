@@ -5,3 +5,5 @@ venv/
 .DS_Store
 *.swp
 shot_*.png
+_shots/
+roperush_save.json
