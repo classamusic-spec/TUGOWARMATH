@@ -205,6 +205,15 @@ class App:
             s.on_exit()
         self.stack.clear()
 
+        # Toasts belong to the screen that raised them. Carrying them across a
+        # transition drops last match's "unlocked" popups on top of the next
+        # match's HUD.
+        if self.toasts is not None:
+            try:
+                self.toasts.clear()
+            except Exception:
+                pass
+
         scene = self.scenes[name]
         self.stack.append(scene)
         scene.on_enter(**kwargs)

@@ -1,93 +1,118 @@
-# Tug-of-War Math
+# RopeRush — Math Tug-of-War
 
-A two-player Python game. Two teams of stick-figure kids stand on each side of
-the screen and pull on a rope. Each team gets its own math problem; whoever
-solves theirs faster yanks the flag toward their side. Wrong answers lock you
-out for a moment and let the other team gain ground. First team to drag the
-flag past their victory line wins; if the 90 s timer runs out first, whichever
-side has the flag wins.
+A premium-feeling math game for **Pre-K through 4th grade**. Two squads of kids
+brace against one rope. Solve your problem faster than the other side and your
+team heaves; miss it and you're locked out while they drag you toward the line.
 
-Built with `pygame` for graphics and `numpy` to synthesize all sound effects at
-startup, so there are no audio asset files to ship.
-
-## Install
+Built with Python + pygame. **No asset files** — every character, icon, sound
+effect and music bed is generated procedurally at runtime.
 
 ```bash
 pip install -r requirements.txt
+python main.py            # add --fullscreen for kiosk / tablet use
 ```
 
-## Run
+---
 
-```bash
-python main.py
-```
+## Design
+
+**"Night arena at dusk."** A deep indigo stadium lit by two rival energy
+sources: **EMBER** (warm coral, left) and **FROST** (electric cyan, right), with
+gold as the neutral reward accent.
+
+The game renders to a fixed **1280×720 logical canvas** that letterbox-scales to
+whatever screen it lands on, so it reads correctly on a phone held horizontally
+from 16:9 through 20:9. Touch and mouse are normalized into one input path, and
+every tap target is at least 64 logical px.
+
+---
+
+## Modes
+
+| Mode | Unlock | What it is |
+|---|---|---|
+| **Classic** | — | 90 seconds. First team to drag the rope home. |
+| **Practice** | — | No clock, no rival, no fail state. Targets your weakest skills and gives hints. |
+| **Blitz** | Lv 3 | 60 seconds, no lockout. Pure speed. |
+| **Survival** | Lv 5 | One opponent who never tires and never stops speeding up. How long can you hold? |
+| **Boss Match** | Lv 7 | A three-phase champion with an HP bar, telegraphed attacks, and a hazard timer. |
+| **Daily Pull** | Lv 10 | Everyone gets the same problems, seeded from the date. One scored attempt. |
+
+**Power-ups** spawn mid-match: `double_pull`, `freeze_opponent`, `shield`
+(negates the next miss), `time_bonus`, `skill_swap`.
+
+---
+
+## Curriculum
+
+Problems are generated, not scripted — twelve skill families across six grade
+bands, each with visual manipulatives:
+
+- **Pre-K** — counting, subitizing, more/less, patterns, shapes
+- **K** — add/sub within 10, ten-frames, number bonds
+- **1st** — within 20, missing addends, place value, time to the half-hour
+- **2nd** — regrouping, arrays, money, time to 5 minutes
+- **3rd** — × ÷ facts, fractions on a number line, area, rounding
+- **4th** — multi-digit ×, long division, equivalent fractions, decimals
+
+Every problem ships with a **visual**: ten-frames, number lines with hop arcs,
+fraction bars and circles, arrays, base-ten blocks, analog clocks, coins,
+shapes.
+
+**Difficulty adapts.** A per-skill mastery score (accuracy *and* speed, decaying
+over time) positions the child in a flow channel — a hot streak ramps up, two
+misses in five ramps down about twice as fast.
+
+**Input follows the problem.** Most answers are typed on a keypad, but clocks
+and comparisons present as choice buttons with formatted labels (`2:40`, `<`),
+because asking a six-year-old to type `240` for twenty-to-three is a UI problem
+masquerading as a math one.
+
+---
+
+## Progression
+
+XP and levels, 1–3 stars per match, coins, cosmetics, 23 achievements, and a
+daily streak. Saves to `roperush_save.json`, corruption-tolerant — a damaged or
+version-mismatched file resets to defaults rather than crashing. Level is always
+re-derived from XP on load, so a hand-edited save can't grant unearned unlocks.
+
+---
+
+## Module map
+
+| File | Role |
+|---|---|
+| `main.py` | Scene graph: menu, mode/grade select, match, results, profile, settings |
+| `app.py` | Window, logical canvas, letterbox scaling, scene stack, input mapping |
+| `theme.py` | Design tokens: palette, type scale, spacing, easing, safe areas |
+| `render_utils.py` | Cached gradients, blurs, shadows, glass panels, glow, text |
+| `characters.py` | Chibi-athletic kids: rim lighting, cloth lag, squash & stretch |
+| `backdrop.py` | Parallax arena: stars, skyline, crowd, light shafts, floor |
+| `vfx.py` | Particle pools, shockwaves, confetti, camera shake / zoom / slow-mo |
+| `ui.py` / `icons.py` | Widget kit and ~50 vector icons |
+| `manipulatives.py` | The visual math renderers |
+| `math_engine.py` | Curriculum generation + adaptive problem streams |
+| `modes.py` | Per-mode rules, power-ups, AI opponent |
+| `progression.py` / `content.py` | Save file, XP, unlocks, mode metadata |
+| `audio.py` | 37 synthesized SFX + 3 procedural music beds |
+
+---
 
 ## Controls
 
-### Menu
-- `Left` / `Right` (or `A` / `D`) — pick a grade band (Pre-K, K, 1st, 2nd, 3rd, 4th)
-- `Space` or `Enter` — start the round
-- `Esc` — quit
+Everything is playable by touch or mouse. On desktop the left team can also use
+the number row, `Enter` to submit and `Backspace` to delete. `Esc` backs out,
+`F3` toggles an FPS readout.
 
-### Gameplay (designed for two players sharing one keyboard)
+In **Classic** and **Blitz** both panels are live, so two kids can play on one
+tablet. In solo modes the right panel is driven by an AI with realistic
+think-time variance and a skill-scaled error rate.
 
-**RED team (left side)** — uses the main keyboard:
-- `0`–`9` and `.` — type digits
-- `+ - * /` — operators (multiply shows as `x`)
-- `Enter` — submit answer
-- `Backspace` — delete last character
-- `C` — clear
+---
 
-**BLUE team (right side)** — uses the numpad:
-- `Num 0`–`Num 9` and `Num .` — type digits
-- `Num + - * /` — operators
-- `Num Enter` — submit answer
-- `Delete` — clear
+## Accessibility
 
-Either team can also operate their on-screen calculator with the **mouse** —
-click the digit/operator/`=` buttons. Useful for younger kids who aren't
-typing yet, and for testing.
-
-### Game over
-- `R`, `Space`, or `Enter` — rematch
-- `M` or `Esc` — back to menu
-
-## Grade bands
-
-| Grade | What kids see |
-| ----- | ------------- |
-| Pre-K | Count the stars / which number is bigger / 1+1, 2+1 |
-| K     | Add and subtract within 5 |
-| 1st   | Add/subtract within 20, missing addend |
-| 2nd   | Add/subtract within 100, easy multiplication |
-| 3rd   | Multiplication and division within 10, two-digit add/sub |
-| 4th   | Multiplication and division within 12, big add/sub, simple fractions like `1/2 + 1/4` |
-
-Fraction problems on 4th-grade accept the decimal answer (e.g. `0.75` for
-`1/2 + 1/4`).
-
-## Pull mechanics
-
-- **Correct answer** — the rope shifts toward your team. Solving in under
-  ~6 seconds gives a speed bonus (up to +60% pull). Harder grades are
-  weighted slightly heavier.
-- **Wrong answer** — you eat a `LOCKED` penalty (~1.4 s of no input), and the
-  rope nudges toward the other team.
-- **Time-up** — whichever side the flag is on wins; dead-center is a tie.
-- **Knockout** — drag the flag 260 px past center and you win immediately.
-
-## Files
-
-- `main.py` — game loop, state machine, rope physics, drawing
-- `math_problems.py` — per-grade problem generators
-- `calculator.py` — on-screen calculator panel for one team
-- `characters.py` — procedural stick-figure kid drawing + pull animation
-- `audio.py` — sample-rate-44k1 sound bank synthesized at startup
-- `requirements.txt` — `pygame`, `numpy`
-
-## Notes
-
-- The game runs at 1280×800. If audio init fails (no sound device, locked
-  driver) the game still starts silently.
-- All assets are drawn or synthesized procedurally — no images, no `.wav`
-  files in the repo.
+Colourblind palette, reduce-motion (damps shake and heavy particles), hint
+toggle, and independent SFX/music volumes — all in Settings. Audio degrades to
+silent if no device is available; the game still runs.
